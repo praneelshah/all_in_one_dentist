@@ -4,16 +4,23 @@ import { Card } from "@/components/ui/card";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Shield, Clock, Award } from "lucide-react";
 import heroVideo from "@/assets/video_dental.mp4";
+import heroPoster from "@/assets/hero-dental.jpg";
 import dentalImplantsImage from "@/assets/dental-implants.jpg";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Home = () => {
   const heroSectionRef = useRef<HTMLDivElement>(null);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
   const [videoDuration, setVideoDuration] = useState(0);
   const [sectionHeight, setSectionHeight] = useState("200vh");
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (isMobile) {
+      setSectionHeight("100vh");
+      return;
+    }
 
     const updateSectionHeight = () => {
       const viewportHeight = window.innerHeight || 800;
@@ -28,10 +35,10 @@ const Home = () => {
     window.addEventListener("resize", updateSectionHeight);
 
     return () => window.removeEventListener("resize", updateSectionHeight);
-  }, [videoDuration]);
+  }, [videoDuration, isMobile]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || isMobile) return;
 
     const handleScroll = () => {
       if (!heroSectionRef.current || !heroVideoRef.current || !videoDuration) {
@@ -55,14 +62,22 @@ const Home = () => {
     window.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [videoDuration]);
+  }, [videoDuration, isMobile]);
 
   const handleLoadedMetadata = () => {
     if (heroVideoRef.current) {
       const { duration } = heroVideoRef.current;
-      if (!Number.isNaN(duration)) {
-        setVideoDuration(duration);
-        heroVideoRef.current.pause();
+      if (Number.isNaN(duration)) return;
+      setVideoDuration(duration);
+      const playPromise = heroVideoRef.current.play();
+      if (isMobile) {
+        playPromise?.catch(() => null);
+      } else {
+        playPromise
+          ?.then(() => heroVideoRef.current?.pause())
+          .catch(() => {
+            heroVideoRef.current?.pause();
+          });
       }
     }
   };
@@ -83,6 +98,9 @@ const Home = () => {
             muted
             playsInline
             preload="auto"
+            autoPlay={isMobile}
+            loop={isMobile}
+            poster={heroPoster}
             onLoadedMetadata={handleLoadedMetadata}
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/20" />
