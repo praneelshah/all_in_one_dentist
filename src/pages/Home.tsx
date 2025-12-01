@@ -8,19 +8,20 @@ import heroPoster from "@/assets/hero-dental.jpg";
 import dentalImplantsImage from "@/assets/dental-implants.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 
+const SCROLL_SPEED_MULTIPLIER = 1.4;
+const SMOOTHING_FACTOR = 0.18;
+
 const Home = () => {
   const heroSectionRef = useRef<HTMLDivElement>(null);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
   const [videoDuration, setVideoDuration] = useState(0);
   const [sectionHeight, setSectionHeight] = useState("200vh");
   const isMobile = useIsMobile();
+  const animationFrameRef = useRef<number>();
+  const targetTimeRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (isMobile) {
-      setSectionHeight("100vh");
-      return;
-    }
 
     const updateSectionHeight = () => {
       const viewportHeight = window.innerHeight || 800;
@@ -28,7 +29,8 @@ const Home = () => {
         videoDuration > 0
           ? Math.max(videoDuration * viewportHeight * 0.9, viewportHeight * 2)
           : viewportHeight * 2;
-      setSectionHeight(`${dynamicHeight}px`);
+      const minHeight = isMobile ? viewportHeight * 1.5 : viewportHeight * 2;
+      setSectionHeight(`${Math.max(dynamicHeight, minHeight)}px`);
     };
 
     updateSectionHeight();
@@ -38,7 +40,7 @@ const Home = () => {
   }, [videoDuration, isMobile]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || isMobile) return;
+    if (typeof window === "undefined") return;
 
     const handleScroll = () => {
       if (!heroSectionRef.current || !heroVideoRef.current || !videoDuration) {
@@ -56,12 +58,45 @@ const Home = () => {
         1
       );
 
-      heroVideoRef.current.currentTime = progress * videoDuration;
+      const targetTime = Math.min(
+        videoDuration,
+        progress * videoDuration * SCROLL_SPEED_MULTIPLIER
+      );
+      targetTimeRef.current = targetTime;
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => window.removeEventListener("scroll", handleScroll);
+  }, [videoDuration]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !videoDuration) return;
+
+    const tick = () => {
+      if (!heroVideoRef.current) {
+        return;
+      }
+
+      const currentTime = heroVideoRef.current.currentTime;
+      const targetTime = targetTimeRef.current;
+      const delta = targetTime - currentTime;
+
+      if (Math.abs(delta) > 0.001) {
+        heroVideoRef.current.currentTime =
+          currentTime + delta * SMOOTHING_FACTOR;
+      }
+
+      animationFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, [videoDuration, isMobile]);
 
   const handleLoadedMetadata = () => {
@@ -69,16 +104,14 @@ const Home = () => {
       const { duration } = heroVideoRef.current;
       if (Number.isNaN(duration)) return;
       setVideoDuration(duration);
+      targetTimeRef.current = 0;
+      heroVideoRef.current.currentTime = 0;
       const playPromise = heroVideoRef.current.play();
-      if (isMobile) {
-        playPromise?.catch(() => null);
-      } else {
-        playPromise
-          ?.then(() => heroVideoRef.current?.pause())
-          .catch(() => {
-            heroVideoRef.current?.pause();
-          });
-      }
+      playPromise
+        ?.then(() => heroVideoRef.current?.pause())
+        .catch(() => {
+          heroVideoRef.current?.pause();
+        });
     }
   };
 
@@ -98,8 +131,6 @@ const Home = () => {
             muted
             playsInline
             preload="auto"
-            autoPlay={isMobile}
-            loop={isMobile}
             poster={heroPoster}
             onLoadedMetadata={handleLoadedMetadata}
           />
